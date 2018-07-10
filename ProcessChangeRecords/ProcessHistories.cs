@@ -194,18 +194,51 @@ namespace BlockedItems
          public List<ChangeRecord> AllChangeRecords;
       }
 
-      public ChangedCollection ShowChangeLogs(TMobile_INFUOPS_Schema.Issue singleIssue, DetailView caller = null)
+      public ChangedCollection ShowChangeLogs(TMobile_INFUOPS_Schema.Issue singleIssue, DetailView caller = null, string initialState = "To Do")
       {
          string[] subItems;
-         ChangedCollection blockers = new ChangedCollection();
+         ChangedCollection changeRecords = new ChangedCollection();
+
+         ChangeRecord initialStartup = new ChangeRecord
+         {
+            IsStatusChangeRecord = true,
+            JIRAChangeField = "status",
+            OldValue = "",
+            NewValue = initialState,
+            When = singleIssue.fields.created,
+            Who = singleIssue.fields.reporter.displayName
+         };
+
+         changeRecords.AddChangeRecord = initialStartup;
+
+         if (singleIssue.fields.customfield_10004.Length !=0 && singleIssue.changelog.total == 0)
+         {
+            // A sprint can be associated at the time of story creation, this is not a change record, but needs to be recorded as such
+
+            string[] SprintData = singleIssue.fields.customfield_10004[0].Split(',');
+            string[] SprintName = SprintData[3].Split('=');
+            ChangeRecord initialSprintStartup = new ChangeRecord
+            {
+               IsStatusChangeRecord = true,
+               JIRAChangeField = "Sprint",
+               OldValue = "",
+               NewValue = SprintName[1],
+               When = singleIssue.fields.created,
+               Who = singleIssue.fields.reporter.displayName
+            };
+
+            changeRecords.AddChangeRecord = initialSprintStartup;
+
+         }
+
+
 
          if (singleIssue.changelog != null)
          {
             foreach (TMobile_INFUOPS_Schema.History historyRecord in singleIssue.changelog.histories)
             {
                ProcessHistories ph = new ProcessHistories();
-
-               foreach (ChangeRecord currentBlocked in ProcessHistoryRecord(blockers, historyRecord, caller)) //, ref currentBlocked);
+               foreach (ChangeRecord currentBlocked in ProcessHistoryRecord(changeRecords, historyRecord, caller)) //, ref currentBlocked);
                {
                   if (caller != null && currentBlocked.IsStatusBlocked)
                   {
@@ -219,11 +252,11 @@ namespace BlockedItems
                      newItem.SubItems.AddRange(subItems);
                      caller.BlockedListRecord = newItem;
                   }
-                  blockers.AddChangeRecord = currentBlocked;
+                  changeRecords.AddChangeRecord = currentBlocked;
                }
             }
          }
-         return blockers;
+         return changeRecords;
       }
       //TODO This should return a set of records. If it's just a status change it doesn't seem to show up if there are multiple changes at the same time.
 
